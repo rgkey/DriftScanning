@@ -24,7 +24,7 @@ from photutils.detection import find_peaks
 #Define a function that MODIFIES from Photutils source code (centroid functionality) which fits a known centroid location with a 
 #2D gaussian function. Fitting is LevMarLSQ architecture within Astropy, and returns the major and minor FWHM of the best-fit model. 
 
-#This is used to find the average FWHM of the image without eyeballing it. It's also used to define other parameters within the PSF photometry stage.
+#TO DO: REMOVE THIS FUNCTION - I don't use it's full functionality
 def FWHM_2dg(data, error=None, mask=None):
 
     # prevent circular import
@@ -88,8 +88,57 @@ def FWHM_2dg(data, error=None, mask=None):
     
     return np.array([fwhm_x, fwhm_y])
 
-def select_point_source():
+def select_reference_stars(data, WCS, Num_target = 20, edge_crit = 0.05, Iso_Perc = 0.99, Flux_Perc = 0.5):
     
+    #This does assume that data has already been cosmic-ray cleaned. This needs to be done
+    #in preprocessing in the main function call to the file
+    
+    
+    #converts fractional edge_crit to a number of pixels to avoid searching
+    edge_a = data.shape[0]*edge_bound
+    edge_b = data.shape[1]*edge_bound
+    
+    pix_scale = u.pixel_scale(g_hdr['PIXSCAL1']*u.arcsec/u.pixel)
+    background = sigma_clipped_stats(data, sigma=3.0)[1] #(median value)
+    
+    #Find all peaks above background threshold on image
+    all_peaks = find_peaks(data, threshold=background)  
+    all_peaks.rename_column('x_peak', 'x') #makes life easier with nndata conventions
+    all_peaks.rename_column('y_peak', 'y')
+    
+    #Match all peaks to nearest neighbour and calculate pixel separation
+    wcs_peaks = WCS.pixel_to_world(all_peaks['x'], all_peaks['y'])
+    
+    #nthneighbour =2 for nearest neighbour, 1 for self-matching
+    match, sep, d3sep = match_coordinates_sky(wcs_peaks, wcs_peaks, nthneighbor = 2)
+    sep_arcsec = sep.arcsecond*u.arcsecond  #annoying Astropy convention
+    sep_pix = sep_arcsec.to(u.pixel, pix_scale)
+    
+    
+    #add data columns
+    all_peaks['ref_id'] = np.arange(len(all_peaks))
+    all_peaks['neighbour'] = match
+    all_peaks['pix_sep'] = sep_pix.value
+    
+    #Strip edge sources from detected peaks
+    central_peaks = all_peaks[(all_peaks['x'] < data.shape[0]-edge_a) & (all_peaks['x'] > edge_a) & 
+              (all_peaks['y'] < data.shape[1]-edge_b) & (all_peaks['y'] > edge_b)]
+    
+    
+    #Strip neighbouring sources closer than the Iso_Perc percentile 
+    sep_cut = np.quantile(sep_pix.value,(Iso_Perc))    #the most isolated stars
+    sep_mask = central_peaks['pix_sep'] > sep_cut
+    iso_peaks = central_peaks[sep_mask]
+
+    #Strip the lower Flux_Perc percentile of faint sources
+    flux_cut = np.quantile(iso_peaks['peak_value'].data,(Flux_Perc)) #upper 50% of brightest stars
+    flux_mask = iso_peaks['peak_value'] > flux_cut
+    bright_peaks = iso_peaks[flux_mask]
+    
+    '''TO DO: futher strip stars based on circular morphology, add quality flags to table for traceback
+       And then keep only the Num_target requested number of reference stars'''
+    
+    return(bright_peaks)
 
 #read in instant calibration version of guided field (otherwise will need a debiasing step if using pointed raw images)
 #The instant calibration is done by NOIRLab community pipeline, should already have correction WCS solution.
@@ -130,54 +179,11 @@ mask_r, data_r = astroscrappy.detect_cosmics(r_img_data, gain=gain_r, readnoise=
                                             cleantype='medmask')
 
 
-#This section is automated to read DAOPhotPSFPhotom parameters as estimate from image without needing user inputs.
-#Threshold detection limit, finding the average background
-thresh_init_g = sigma_clipped_stats(data_g, sigma=3.0)[1] #(median value)
-thresh_init_r = sigma_clipped_stats(data_r, sigma=3.0)[1] #(median value)
-
-#Automate the FWHM detection using bright, isolated reference stars
-target_num = 20 #set number of ePSF reference stars
-pix_scale = u.pixel_scale(g_hdr['PIXSCAL1']*u.arcsec/u.pixel) #global value across any DECam filter
-size = 15  #edge case removal, pixel width from edge of image to use in extracting single reference stars
-hsize = (size - 1) / 2
-
-#Find all bright stars as a first pass
-g_ref_peaks = find_peaks(data_g, threshold=thresh_init_g)  
-r_ref_peaks = find_peaks(data_r, threshold=thresh_init_r)  
 
 '''SECTION A: find well behaved, bright, isolated stars:
 To use with building the PSF model for all stars'''
 
-#find nearest neighbour to each star
-#since WCS is internal to chip image, no recalibration needed as offset is ~linearly constant
-wcs_peaks_g = w_g.pixel_to_world(g_ref_peaks['x_peak'], g_ref_peaks['y_peak'])
-g_match, g_sep, g_d3sep = match_coordinates_sky(wcs_peaks_g, wcs_peaks_g, nthneighbor = 2) #nthneighbour =2 for nearest neighbour, 1 for self-matching
-g_sep_arcsec = g_sep.arcsecond*u.arcsecond  #annoying Astropy convention
-g_sep_pix = g_sep_arcsec.to(u.pixel, pix_scale)
-g_ref_peaks['ref_id'] = np.arange(len(g_ref_peaks))
-g_ref_peaks['neighbour'] = g_match
-g_ref_peaks['pix_sep'] = g_sep_pix.value
-
-#cut reference peaks based on separation in pixels and then brightness
-g_sep_cut = np.quantile(g_sep_pix.value,(0.99))    #the most isolated stars
-g_sep_mask = g_ref_peaks['pix_sep'] > g_sep_cut
-g_iso_ref = g_ref_peaks[g_sep_mask]
-
-g_flux_cut = np.quantile(g_iso_ref['peak_value'].data,(0.5)) #upper 50% of brightest stars
-g_flux_mask = g_iso_ref['peak_value'] > g_flux_cut
-g_bright_ref = g_iso_ref[g_flux_mask]
-
-#sort and add in overfill to target number slice to make sure extractions fall within edge of chip
-g_bright_ref = g_bright_ref[g_bright_ref['pix_sep'].argsort()][::-1][0:target_num+10]   
-
-g_x = g_bright_ref['x_peak']  
-g_y = g_bright_ref['y_peak']  
-g_edge = ((g_x > hsize) & (g_x < (data_g.shape[1] -1 - hsize)) &
-        (g_y > hsize) & (g_y < (data_g.shape[0] -1 - hsize)))  
-
-g_stars_tbl = Table()
-g_stars_tbl['x'] = g_x[g_edge]  
-g_stars_tbl['y'] = g_y[g_edge]  
+g_stars_tbl = select_reference_stars(data_g, w_g)
 
 g_median_val = sigma_clipped_stats(data_g, sigma=2.0)[1]
 g_data_clean = data_g - g_median_val  
@@ -185,7 +191,7 @@ g_data_clean = data_g - g_median_val
 g_nddata = NDData(data=g_data_clean) 
 g_stars = extract_stars(g_nddata, g_stars_tbl, size=25)
 
-
+'''TO DO: Build this into the select_reference_stars function'''
 #use only sources with circular morphology (removes saturated sources and galaxies)
 g_symmetry = []
 for star in g_stars:
@@ -204,36 +210,8 @@ g_points = [g_stars[i].data for i in g_iso_source]
 g_fwhms = [np.median(FWHM_2dg(star)) for star in g_points]
 fwhm_init_g = sigma_clipped_stats(g_fwhms, sigma=3.0)[1]  #gives us the FWHM from the reference stars
 
-#Redo the above code for r-band image (Could remove this and make this whole section a function)
-wcs_peaks_r = w_r.pixel_to_world(r_ref_peaks['x_peak'], r_ref_peaks['y_peak'])
-r_match, r_sep, r_d3sep = match_coordinates_sky(wcs_peaks_r, wcs_peaks_r, nthneighbor = 2) 
-r_sep_arcsec = r_sep.arcsecond*u.arcsecond  #annoying Astropy convention
-r_sep_pix = r_sep_arcsec.to(u.pixel, pix_scale)
-r_ref_peaks['ref_id'] = np.arange(len(r_ref_peaks))
-r_ref_peaks['neighbour'] = r_match
-r_ref_peaks['pix_sep'] = r_sep_pix.value
-
-#cut reference peaks based on separation in pixels and then brightness
-r_sep_cut = np.quantile(r_sep_pix.value,(0.99))    #the most isolated stars
-r_sep_mask = r_ref_peaks['pix_sep'] > r_sep_cut
-r_iso_ref = r_ref_peaks[r_sep_mask]
-
-r_flux_cut = np.quantile(r_iso_ref['peak_value'].data,(0.5)) #upper 50% of brightest stars
-r_flux_mask = r_iso_ref['peak_value'] > r_flux_cut
-r_bright_ref = r_iso_ref[r_flux_mask]
-
-#sort and add in overfill to target number slice to make sure extractions fall within edge of chip
-r_bright_ref = r_bright_ref[r_bright_ref['pix_sep'].argsort()][::-1][0:target_num+10]   
-
-
-r_x = r_bright_ref['x_peak']  
-r_y = r_bright_ref['y_peak']  
-r_edge = ((r_x > hsize) & (r_x < (data_r.shape[1] -1 - hsize)) &
-        (r_y > hsize) & (r_y < (data_r.shape[0] -1 - hsize)))  
-
-r_stars_tbl = Table()
-r_stars_tbl['x'] = r_x[r_edge]  
-r_stars_tbl['y'] = r_y[r_edge]  
+#Redo the above code for r-band image (Am in the process of removing this and make this whole section a function call in main)
+r_stars_tbl = select_reference_stars(data_r, w_r)
 
 r_median_val = sigma_clipped_stats(data_r, sigma=2.0)[1]
 r_data_clean = data_r - r_median_val  
