@@ -88,7 +88,7 @@ def FWHM_2dg(data, error=None, mask=None):
     
     return np.array([fwhm_x, fwhm_y])
 
-def select_reference_stars(data, WCS, Num_target = 20, edge_crit = 0.05, Iso_Perc = 0.99, Flux_Perc = 0.5):
+def select_reference_stars(data, WCS, pixscale, Num_target = 20, edge_crit = 0.05, Iso_Perc = 0.99, Flux_Perc = 0.5):
     
     #This does assume that data has already been cosmic-ray cleaned. This needs to be done
     #in preprocessing in the main function call to the file
@@ -98,7 +98,7 @@ def select_reference_stars(data, WCS, Num_target = 20, edge_crit = 0.05, Iso_Per
     edge_a = data.shape[0]*edge_crit
     edge_b = data.shape[1]*edge_crit
     
-    pix_scale = u.pixel_scale(g_hdr['PIXSCAL1']*u.arcsec/u.pixel)
+    pix_scale = u.pixel_scale(pixscale*u.arcsec/u.pixel)
     background = sigma_clipped_stats(data, sigma=3.0)[1] #(median value)
     
     #Find all peaks above background threshold on image
@@ -183,7 +183,7 @@ mask_r, data_r = astroscrappy.detect_cosmics(r_img_data, gain=gain_r, readnoise=
 '''SECTION A: find well behaved, bright, isolated stars:
 To use with building the PSF model for all stars'''
 
-g_stars_tbl = select_reference_stars(data_g, w_g)
+g_stars_tbl = select_reference_stars(data_g, w_g, g_hdr['PIXSCAL1'])
 
 g_median_val = sigma_clipped_stats(data_g, sigma=2.0)[1]
 g_data_clean = data_g - g_median_val  
@@ -211,7 +211,7 @@ g_fwhms = [np.median(FWHM_2dg(star)) for star in g_points]
 fwhm_init_g = sigma_clipped_stats(g_fwhms, sigma=3.0)[1]  #gives us the FWHM from the reference stars
 
 #Redo the above code for r-band image (Am in the process of removing this and make this whole section a function call in main)
-r_stars_tbl = select_reference_stars(data_r, w_r)
+r_stars_tbl = select_reference_stars(data_r, w_r, r_hdr['PIXSCAL1'])
 
 r_median_val = sigma_clipped_stats(data_r, sigma=2.0)[1]
 r_data_clean = data_r - r_median_val  
