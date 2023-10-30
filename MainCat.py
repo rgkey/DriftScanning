@@ -95,8 +95,8 @@ def select_reference_stars(data, WCS, Num_target = 20, edge_crit = 0.05, Iso_Per
     
     
     #converts fractional edge_crit to a number of pixels to avoid searching
-    edge_a = data.shape[0]*edge_bound
-    edge_b = data.shape[1]*edge_bound
+    edge_a = data.shape[0]*edge_crit
+    edge_b = data.shape[1]*edge_crit
     
     pix_scale = u.pixel_scale(g_hdr['PIXSCAL1']*u.arcsec/u.pixel)
     background = sigma_clipped_stats(data, sigma=3.0)[1] #(median value)
