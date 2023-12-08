@@ -89,7 +89,7 @@ def stadium_perimeter(cutout_data, x0, y0, length, radius, pad = None):
         outer_contour[end[0]:start[0]+1, start[1]-1:end[1]+2] = 0  
     
         #plot
-        plt.figure(figsize = (15,10), dpi = 150)
+        plt.figure(figsize = (5,5), dpi = 150)
         plt.imshow(cutout_data, norm = LogNorm(), cmap = drift_cmap)
         
         plt.imshow(contour, cmap = colors.ListedColormap(['None', contour_cmap[0]]))
@@ -107,7 +107,7 @@ def stadium_perimeter(cutout_data, x0, y0, length, radius, pad = None):
         return(None)
     
     else:
-        plt.figure(figsize = (15,10), dpi = 150)
+        plt.figure(figsize = (5,5), dpi = 150)
         plt.imshow(cutout_data, norm = LogNorm(), cmap = drift_cmap)
         
         plt.imshow(contour, cmap = colors.ListedColormap(['None', contour_cmap[0]]))
