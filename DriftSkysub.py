@@ -53,25 +53,26 @@ def stadium_perimeter(cutout_data, x0, y0, length, radius, pad = None):
     drift_cmap = cm.rainforest
     contour_cmap = cm.take_cmap_colors(cm.guppy, 2, return_fmt='hex')
     
-    
-    #Make individual apeture perimiters
-    contour = np.zeros(cutout_data.shape)
-    rlhs, clhs = circle_perimeter(y0,x0 - length//2, radius)
-    rrhs, crhs = circle_perimeter(y0,x0 + length//2, radius)
-    
-    start = ((y0-1)+radius, x0 - length//2)
-    end=((y0+1)-radius, x0 + length//2)
-    rRect, cRect = rectangle_perimeter(start = start, end=end, shape=cutout_data.shape)
-    
-    #define the additive contour lines
-    contour[rlhs, clhs] = 1
-    contour[rrhs, crhs] = 1
-    contour[rRect, cRect] = 1
-    
-    #hollow out the inside of the apeture to avoid plotting intersections and cross-hairs
-    contour[end[0]:start[0]+1, start[1]-1:end[1]+2] = 0  
-    
-    
+    try:
+        #Make individual apeture perimiters
+        contour = np.zeros(cutout_data.shape)
+        rlhs, clhs = circle_perimeter(y0,x0 - length//2, radius)
+        rrhs, crhs = circle_perimeter(y0,x0 + length//2, radius)
+
+        start = ((y0-1)+radius, x0 - length//2)
+        end=((y0+1)-radius, x0 + length//2)
+        rRect, cRect = rectangle_perimeter(start = start, end=end, shape=cutout_data.shape)
+
+        #define the additive contour lines
+        contour[rlhs, clhs] = 1
+        contour[rrhs, crhs] = 1
+        contour[rRect, cRect] = 1
+
+        #hollow out the inside of the apeture to avoid plotting intersections and cross-hairs
+        contour[end[0]:start[0]+1, start[1]-1:end[1]+2] = 0  
+    except:
+        warnings.warn('DSI located near to image boundary. Plot_star method returning None.')
+        return(None)
     #if pad is not None, define a second aperture to plot the annulus of the driftscan
     if pad:
         outer_contour = np.zeros(cutout_data.shape)
@@ -122,6 +123,7 @@ def stadium_perimeter(cutout_data, x0, y0, length, radius, pad = None):
         fig = plt.gcf()
         fig.savefig('aperture_plot.png')
         return(None)
+        
 def stadium_annulus(chip_data, x0, y0, cutout_size, length, radius, pad, plot_star = True, verbose_save = 0):
         
     '''
