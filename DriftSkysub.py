@@ -170,15 +170,15 @@ def stadium_annulus(chip_data, x0, y0, cutout_size, length, radius, pad, plot_st
     annulus_data = cutout.data*annulus_mask
     
     #calculate the sky within the annulus with sigma_clipping to avoid blended pixels
-    sky = annulus_data[annulus_data == 0] = np.nan
-    clipped_sky = sigma_clip(sky, sigma=2, maxiters=10)
-    
+   
+    clipped_sky = sigma_clip(annulus_data, sigma=2, maxiters=10).data
+
     #verbose saves and plots
     if plot_star:
         stadium_perimeter(cutout.data, xi, yi, length, radius, pad = pad)
         
     if verbose_save == 0:
-        continue
+        pass
     if verbose_save == 1:
         #save annulus data as an array
         np.save(f'annulus_data_{dsi_ID}.npy', annulus_data)
