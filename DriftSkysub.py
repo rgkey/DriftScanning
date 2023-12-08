@@ -151,7 +151,7 @@ def stadium_annulus(chip_data, x0, y0, cutout_size, length, radius, pad, plot_st
     '''
     
     #make a cutout2D object of the drift around x0, y0
-    cutout = Cutout2D(full_data, (x0, y0), (cutout_size, cutout_size))
+    cutout = Cutout2D(chip_data, (x0, y0), (cutout_size, cutout_size))
     xi, yi = cutout.to_cutout_position((x0, y0))
     
     aperRect = RectangularAperture((xi, yi), w = length, h = radius*2)
