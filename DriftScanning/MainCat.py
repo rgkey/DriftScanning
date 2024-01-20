@@ -21,6 +21,8 @@ from astropy.modeling.fitting import LevMarLSQFitter
 from photutils.psf import DAOPhotPSFPhotometry
 from photutils.detection import find_peaks
 
+from DriftScanning.utils import ImageImport
+
 def select_reference_stars(data, WCS,pixscale, Num_target = 20, edge_crit = 0.05, Iso_Perc = 0.99, Flux_Perc = 0.5,
                           Morph_Perc = 0.25, plot_psf_stars = True, timestamp = None):
     
