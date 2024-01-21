@@ -158,43 +158,49 @@ def select_reference_stars(data, WCS,pixscale, Num_target = 20, edge_crit = 0.05
         
         
     return(ref_sample)
+class Cataloguer:
 
-def catalogue_generator(ccd_name, filepath):
-  Image = ImageImport(ccd_name, filepath)
+  #Need a function that initialises what ccd_name and file_path
+  #def __init__(self):
+  #Image = ImageImport(ccd_name, filepath_
+  #return Image
   
-  CRTask = cosmicray_removal(Image)
-  REFtask = select_reference_stars(Image.data, Image.wcs, Image.hdr['PIXSCAL1'])
-
-  #Use FWHM to define the PSF sigma guess for the PRF model
-  psf_fwhm = sigma_clipped_stats(REFtask['fwhm'].values, sigma=3.0)[1]
-  sigma_psf = psf_fwhm * gaussian_fwhm_to_sigma
-  background = Image.hdr['BACKGROUND'] #DEBUG THIS HEADER NAME
+  def pointed_catalogue(self, ccd_name, filepath):
+    Image = ImageImport(ccd_name, filepath)
+    
+    CRTask = cosmicray_removal(Image)
+    REFtask = select_reference_stars(Image.data, Image.wcs, Image.hdr['PIXSCAL1'])
   
-  #Run photometry on the CCD images
-  fitter = LevMarLSQFitter()
-  psf_model = IntegratedGaussianPRF(sigma=sigma_psf) 
-  photometry = DAOPhotPSFPhotometry(crit_separation = 3*psf_fwhm, threshold = background, 
-                                    fwhm = psf_fwhm, sigma = 3, psf_model=psf_model, fitter=LevMarLSQFitter(),
-                                    niters=1, fitshape=(7,7))
-
-  table = photometry(image=Image.data)   
-  residual = photometry.get_residual_image()
+    #Use FWHM to define the PSF sigma guess for the PRF model
+    psf_fwhm = sigma_clipped_stats(REFtask['fwhm'].values, sigma=3.0)[1]
+    sigma_psf = psf_fwhm * gaussian_fwhm_to_sigma
+    background = Image.hdr['BACKGROUND'] #DEBUG THIS HEADER NAME
+    
+    #Run photometry on the CCD images
+    fitter = LevMarLSQFitter()
+    psf_model = IntegratedGaussianPRF(sigma=sigma_psf) 
+    photometry = DAOPhotPSFPhotometry(crit_separation = 3*psf_fwhm, threshold = background, 
+                                      fwhm = psf_fwhm, sigma = 3, psf_model=psf_model, fitter=LevMarLSQFitter(),
+                                      niters=1, fitshape=(7,7))
   
-  #Use WCS convention to get estimate of local RA, Dec for X-match between r and g band
-  sky_positions = w.pixel_to_world(table_g['x_fit'], table_g['y_fit'])
-  
-  #Make final frame
-  photometry_dataframe = pd.DataFrame()
-  comb_phot['chp'] = [ccd_names[i]]*len(w)           
-  comb_phot['id'] = table['id'][match]
-  comb_phot['x'] = table['x_fit'][match]
-  comb_phot['y'] = table['y_fit'][match]
-  comb_phot['flux'] = table['flux_fit'][match]
-  comb_phot['flux_unc'] = table['flux_unc'][match]
-  comb_phot['ra'] = np.array([i.ra.degree for i in w])[match]
-  comb_phot['dec'] = np.array([i.dec.degree for i in w])[match]
-  
-  return(comb_phot)
+    table = photometry(image=Image.data)   
+    residual = photometry.get_residual_image()
+    
+    #Use WCS convention to get estimate of local RA, Dec for X-match between r and g band
+    sky_positions = w.pixel_to_world(table_g['x_fit'], table_g['y_fit'])
+    
+    #Make final frame
+    photometry_dataframe = pd.DataFrame()
+    comb_phot['chp'] = [ccd_names[i]]*len(w)           
+    comb_phot['id'] = table['id'][match]
+    comb_phot['x'] = table['x_fit'][match]
+    comb_phot['y'] = table['y_fit'][match]
+    comb_phot['flux'] = table['flux_fit'][match]
+    comb_phot['flux_unc'] = table['flux_unc'][match]
+    comb_phot['ra'] = np.array([i.ra.degree for i in w])[match]
+    comb_phot['dec'] = np.array([i.dec.degree for i in w])[match]
+    
+    return(comb_phot)
 
 
 #Call this in the main function
